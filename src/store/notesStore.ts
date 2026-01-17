@@ -60,22 +60,34 @@ const NOTE_COLORS: NoteColor[] = [
   '#1a1f2e'
 ];
 
-const getRandomColor = (): NoteColor => {
-  return NOTE_COLORS[Math.floor(Math.random() * NOTE_COLORS.length)];
+const PINK_NOTE_COLORS: NoteColor[] = [
+  '#3d1a2e',
+  '#3a1e33',
+  '#3d2035',
+  '#3b1d31',
+  '#3e1f34',
+  '#3c1e30',
+  '#3a1d2f',
+  '#3d1f33'
+];
+
+const getRandomColor = (canvas: 1 | 2): NoteColor => {
+  const colors = canvas === 2 ? PINK_NOTE_COLORS : NOTE_COLORS;
+  return colors[Math.floor(Math.random() * colors.length)];
 };
 
 const getMaxZIndex = (notes: StickyNote[]): number => {
   return Math.max(0, ...notes.map(n => n.zIndex));
 };
 
-const createNote = (position: Position, existingNotes: StickyNote[]): StickyNote => {
+const createNote = (position: Position, existingNotes: StickyNote[], canvas: 1 | 2): StickyNote => {
   const now = Date.now();
   return {
     id: `note-${now}-${Math.random().toString(36).substr(2, 9)}`,
     x: position.x,
     y: position.y,
     text: 'New Note',
-    color: getRandomColor(),
+    color: getRandomColor(canvas),
     width: 250,
     height: 200,
     rotation: 0,
@@ -126,7 +138,7 @@ export const useNotesStore = create<NotesState>()(
         // Note actions
         addNote: (position) => set((state) => {
           const currentNotes = state.canvases[state.activeCanvas];
-          const newNote = createNote(position, currentNotes);
+          const newNote = createNote(position, currentNotes, state.activeCanvas);
           const newNotes = [...currentNotes, newNote];
           const newCanvases = {
             ...state.canvases,
@@ -230,7 +242,8 @@ export const useNotesStore = create<NotesState>()(
           
           const duplicate = createNote(
             { x: original.x + 30, y: original.y + 30 },
-            state.notes
+            state.notes,
+            state.activeCanvas
           );
           const newNote = {
             ...duplicate,

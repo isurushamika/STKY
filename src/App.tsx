@@ -231,14 +231,16 @@ const App: React.FC = () => {
     <div className="App">
       <div className="canvas-switcher">
         <button
-          className={`canvas-button ${activeCanvas === 1 ? 'active' : ''}`}
+          className={`canvas-button canvas-1 ${activeCanvas === 1 ? 'active' : ''}`}
           onClick={() => setActiveCanvas(1)}
+          title="Ideas"
         >
           1
         </button>
         <button
-          className={`canvas-button ${activeCanvas === 2 ? 'active' : ''}`}
+          className={`canvas-button canvas-2 ${activeCanvas === 2 ? 'active' : ''}`}
           onClick={() => setActiveCanvas(2)}
+          title="Projects"
         >
           2
         </button>

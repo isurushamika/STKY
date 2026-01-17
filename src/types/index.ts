@@ -36,4 +36,12 @@ export type NoteColor =
   | '#1a2332' // Navy dark
   | '#1e2530' // Dark steel
   | '#1c2333' // Midnight
-  | '#1a1f2e'; // Deep dark
+  | '#1a1f2e' // Deep dark
+  | '#3d1a2e' // Dark pink
+  | '#3a1e33' // Deep pink
+  | '#3d2035' // Pink slate
+  | '#3b1d31' // Pink gray
+  | '#3e1f34' // Pink navy
+  | '#3c1e30' // Pink steel
+  | '#3a1d2f' // Pink midnight
+  | '#3d1f33'; // Pink deep
