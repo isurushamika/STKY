@@ -20,6 +20,8 @@ const App: React.FC = () => {
   const {
     notes,
     selectedNoteIds,
+    activeCanvas,
+    setActiveCanvas,
     addNote,
     deleteNote,
     selectNotes,
@@ -227,6 +229,21 @@ const App: React.FC = () => {
 
   return (
     <div className="App">
+      <div className="canvas-switcher">
+        <button
+          className={`canvas-button ${activeCanvas === 1 ? 'active' : ''}`}
+          onClick={() => setActiveCanvas(1)}
+        >
+          1
+        </button>
+        <button
+          className={`canvas-button ${activeCanvas === 2 ? 'active' : ''}`}
+          onClick={() => setActiveCanvas(2)}
+        >
+          2
+        </button>
+      </div>
+
       <div
         ref={canvasRef}
         className={`canvas ${isPanning ? 'panning' : ''}`}

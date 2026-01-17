@@ -4,6 +4,11 @@ import { StickyNote, Position, NoteColor } from '../types';
 
 interface NotesState {
   // State
+  canvases: {
+    1: StickyNote[];
+    2: StickyNote[];
+  };
+  activeCanvas: 1 | 2;
   notes: StickyNote[];
   selectedNoteId: string | null;
   selectedNoteIds: string[];
@@ -14,6 +19,7 @@ interface NotesState {
   historyIndex: number;
   
   // Actions
+  setActiveCanvas: (canvas: 1 | 2) => void;
   addNote: (position: Position) => void;
   updateNote: (id: string, updates: Partial<StickyNote>) => void;
   deleteNote: (id: string) => void;
@@ -95,6 +101,11 @@ export const useNotesStore = create<NotesState>()(
     persist(
       (set, get) => ({
         // Initial state
+        canvases: {
+          1: [],
+          2: [],
+        },
+        activeCanvas: 1,
         notes: [],
         selectedNoteId: null,
         selectedNoteIds: [],
@@ -104,12 +115,26 @@ export const useNotesStore = create<NotesState>()(
         history: [[]],
         historyIndex: 0,
 
+        // Canvas switching
+        setActiveCanvas: (canvas) => set((state) => ({
+          activeCanvas: canvas,
+          notes: state.canvases[canvas],
+          selectedNoteId: null,
+          selectedNoteIds: [],
+        })),
+
         // Note actions
         addNote: (position) => set((state) => {
-          const newNote = createNote(position, state.notes);
-          const newNotes = [...state.notes, newNote];
+          const currentNotes = state.canvases[state.activeCanvas];
+          const newNote = createNote(position, currentNotes);
+          const newNotes = [...currentNotes, newNote];
+          const newCanvases = {
+            ...state.canvases,
+            [state.activeCanvas]: newNotes,
+          };
           const historyUpdate = saveToHistory(newNotes, state.history, state.historyIndex);
           return {
+            canvases: newCanvases,
             notes: newNotes,
             selectedNoteId: newNote.id,
             ...historyUpdate,
@@ -117,22 +142,34 @@ export const useNotesStore = create<NotesState>()(
         }),
 
         updateNote: (id, updates) => set((state) => {
-          const newNotes = state.notes.map(note =>
+          const currentNotes = state.canvases[state.activeCanvas];
+          const newNotes = currentNotes.map(note =>
             note.id === id
               ? { ...note, ...updates, updatedAt: Date.now() }
               : note
           );
+          const newCanvases = {
+            ...state.canvases,
+            [state.activeCanvas]: newNotes,
+          };
           const historyUpdate = saveToHistory(newNotes, state.history, state.historyIndex);
           return {
+            canvases: newCanvases,
             notes: newNotes,
             ...historyUpdate,
           };
         }),
 
         deleteNote: (id) => set((state) => {
-          const newNotes = state.notes.filter(note => note.id !== id);
+          const currentNotes = state.canvases[state.activeCanvas];
+          const newNotes = currentNotes.filter(note => note.id !== id);
+          const newCanvases = {
+            ...state.canvases,
+            [state.activeCanvas]: newNotes,
+          };
           const historyUpdate = saveToHistory(newNotes, state.history, state.historyIndex);
           return {
+            canvases: newCanvases,
             notes: newNotes,
             selectedNoteId: state.selectedNoteId === id ? null : state.selectedNoteId,
             selectedNoteIds: state.selectedNoteIds.filter(nid => nid !== id),
@@ -140,13 +177,22 @@ export const useNotesStore = create<NotesState>()(
           };
         }),
 
-        moveNote: (id, position) => set((state) => ({
-          notes: state.notes.map(note =>
+        moveNote: (id, position) => set((state) => {
+          const currentNotes = state.canvases[state.activeCanvas];
+          const newNotes = currentNotes.map(note =>
             note.id === id
               ? { ...note, x: position.x, y: position.y, updatedAt: Date.now() }
               : note
-          ),
-        })),
+          );
+          const newCanvases = {
+            ...state.canvases,
+            [state.activeCanvas]: newNotes,
+          };
+          return {
+            canvases: newCanvases,
+            notes: newNotes,
+          };
+        }),
 
         resizeNote: (id, size) => set((state) => ({
           notes: state.notes.map(note =>
@@ -163,11 +209,18 @@ export const useNotesStore = create<NotesState>()(
         clearSelection: () => set({ selectedNoteIds: [], selectedNoteId: null }),
 
         bringToFront: (id) => set((state) => {
-          const maxZ = getMaxZIndex(state.notes);
+          const currentNotes = state.canvases[state.activeCanvas];
+          const maxZ = getMaxZIndex(currentNotes);
+          const newNotes = currentNotes.map(note =>
+            note.id === id ? { ...note, zIndex: maxZ + 1 } : note
+          );
+          const newCanvases = {
+            ...state.canvases,
+            [state.activeCanvas]: newNotes,
+          };
           return {
-            notes: state.notes.map(note =>
-              note.id === id ? { ...note, zIndex: maxZ + 1 } : note
-            ),
+            canvases: newCanvases,
+            notes: newNotes,
           };
         }),
 
@@ -260,7 +313,8 @@ export const useNotesStore = create<NotesState>()(
       {
         name: 'sticky-notes-storage',
         partialize: (state) => ({
-          notes: state.notes,
+          canvases: state.canvases,
+          activeCanvas: state.activeCanvas,
           pan: state.pan,
           zoom: state.zoom,
         }),
