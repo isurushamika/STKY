@@ -10,6 +10,26 @@ export interface StickyNote {
   zIndex: number;
   createdAt: number;
   updatedAt: number;
+  attachments?: Attachment[];
+  tasks?: Task[];
+}
+
+export interface Attachment {
+  id: string;
+  type: 'link' | 'file' | 'image';
+  name: string;
+  url: string;
+  createdAt: number;
+}
+
+export interface Task {
+  id: string;
+  name: string;
+  startDate: string;
+  endDate: string;
+  progress: number;
+  status: 'not-started' | 'in-progress' | 'completed';
+  createdAt: number;
 }
 
 export interface Position {
@@ -26,6 +46,15 @@ export interface CanvasState {
   pan: Position;
   zoom: number;
   isPanning: boolean;
+}
+
+export type CanvasType = 'idea' | 'project';
+
+export interface CanvasMeta {
+  id: string;
+  name: string;
+  type: CanvasType;
+  createdAt: number;
 }
 
 export type NoteColor = 

@@ -11,9 +11,13 @@ interface StickyNoteProps {
 const StickyNote: React.FC<StickyNoteProps> = ({ note }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  const [isResizing, setIsResizing] = useState(false);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  const [resizeOffset, setResizeOffset] = useState(0);
   const dragStartPos = useRef({ x: 0, y: 0 });
   const currentDragOffset = useRef({ x: 0, y: 0 });
+  const resizeStartX = useRef(0);
+  const currentResizeOffset = useRef(0);
   
   const noteRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -24,6 +28,7 @@ const StickyNote: React.FC<StickyNoteProps> = ({ note }) => {
     moveNote,
     selectNote,
     bringToFront,
+    setDetailViewNoteId,
   } = useNotesStore();
 
   const isSelected = selectedNoteIds.includes(note.id);
@@ -41,8 +46,26 @@ const StickyNote: React.FC<StickyNoteProps> = ({ note }) => {
     }
   }, [isEditing]);
 
+  const handleResizeStart = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    resizeStartX.current = e.clientX;
+    setIsResizing(true);
+    setResizeOffset(0);
+    currentResizeOffset.current = 0;
+    selectNote(note.id);
+    bringToFront(note.id);
+  };
+
   const handleMouseDown = (e: React.MouseEvent) => {
     if ((e.target as HTMLElement).tagName === 'TEXTAREA') return;
+    if ((e.target as HTMLElement).classList.contains('resize-handle')) return;
+    
+    // Ctrl+click opens detail view
+    if (e.ctrlKey || e.metaKey) {
+      e.stopPropagation();
+      setDetailViewNoteId(note.id);
+      return;
+    }
     
     dragStartPos.current = {
       x: e.clientX,
@@ -91,6 +114,38 @@ const StickyNote: React.FC<StickyNoteProps> = ({ note }) => {
     return undefined;
   }, [isDragging, note.id, note.x, note.y, moveNote]);
 
+  useEffect(() => {
+    if (isResizing) {
+      const handleMouseMove = (e: MouseEvent) => {
+        const offsetX = e.clientX - resizeStartX.current;
+        currentResizeOffset.current = offsetX;
+        setResizeOffset(offsetX);
+      };
+
+      const handleMouseUp = () => {
+        const finalOffset = currentResizeOffset.current;
+        // Reset resize state first
+        setIsResizing(false);
+        setResizeOffset(0);
+        currentResizeOffset.current = 0;
+        
+        // Then update the actual width (minimum 150px)
+        if (finalOffset !== 0) {
+          const newWidth = Math.max(150, note.width + finalOffset);
+          updateNote(note.id, { width: newWidth });
+        }
+      };
+
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+      return () => {
+        document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('mouseup', handleMouseUp);
+      };
+    }
+    return undefined;
+  }, [isResizing, note.id, note.width, updateNote]);
+
   const handleDoubleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     setIsEditing(true);
@@ -107,11 +162,11 @@ const StickyNote: React.FC<StickyNoteProps> = ({ note }) => {
   return (
     <div
       ref={noteRef}
-      className={`sticky-note ${isSelected ? 'selected' : ''} ${isDragging ? 'dragging' : ''}`}
+      className={`sticky-note ${isSelected ? 'selected' : ''} ${isDragging ? 'dragging' : ''} ${isResizing ? 'resizing' : ''}`}
       style={{
         left: `${note.x}px`,
         top: `${note.y}px`,
-        width: `${note.width}px`,
+        width: `${note.width + resizeOffset}px`,
         minHeight: `${note.height}px`,
         backgroundColor: note.color,
         transform: `translate(${dragOffset.x}px, ${dragOffset.y}px) rotate(${note.rotation}deg)`,
@@ -135,7 +190,13 @@ const StickyNote: React.FC<StickyNoteProps> = ({ note }) => {
       )}
       
       {isSelected && (
-        <div className="note-selection-indicator" />
+        <>
+          <div className="note-selection-indicator" />
+          <div 
+            className="resize-handle"
+            onMouseDown={handleResizeStart}
+          />
+        </>
       )}
     </div>
   );

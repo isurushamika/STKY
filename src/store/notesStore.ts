@@ -1,17 +1,20 @@
 import { create } from 'zustand';
 import { devtools, persist } from 'zustand/middleware';
-import { StickyNote, Position, NoteColor } from '../types';
+import { StickyNote, Position, NoteColor, CanvasMeta, CanvasType } from '../types';
+
+type CanvasId = string;
 
 interface NotesState {
   // State
-  canvases: {
-    1: StickyNote[];
-    2: StickyNote[];
-  };
-  activeCanvas: 1 | 2;
+  canvases: Record<CanvasId, StickyNote[]>;
+  canvasesMeta: Record<CanvasId, CanvasMeta>;
+  canvasOrder: CanvasId[];
+  activeCanvasId: CanvasId;
+  activeCanvasMeta: CanvasMeta;
   notes: StickyNote[];
   selectedNoteId: string | null;
   selectedNoteIds: string[];
+  detailViewNoteId: string | null;
   pan: Position;
   zoom: number;
   isPanning: boolean;
@@ -19,7 +22,16 @@ interface NotesState {
   historyIndex: number;
   
   // Actions
-  setActiveCanvas: (canvas: 1 | 2) => void;
+  setActiveCanvas: (canvasId: CanvasId) => void;
+  addCanvas: (canvas: { name: string; type: CanvasType }) => CanvasId;
+  renameCanvas: (canvasId: CanvasId, name: string) => void;
+  deleteCanvas: (canvasId: CanvasId) => void;
+  setDetailViewNoteId: (id: string | null) => void;
+  addAttachment: (noteId: string, attachment: Omit<import('../types').Attachment, 'id' | 'createdAt'>) => void;
+  removeAttachment: (noteId: string, attachmentId: string) => void;
+  addTask: (noteId: string, task: Omit<import('../types').Task, 'id' | 'createdAt'>) => void;
+  updateTask: (noteId: string, taskId: string, updates: Partial<import('../types').Task>) => void;
+  removeTask: (noteId: string, taskId: string) => void;
   addNote: (position: Position) => void;
   updateNote: (id: string, updates: Partial<StickyNote>) => void;
   deleteNote: (id: string) => void;
@@ -71,8 +83,8 @@ const PINK_NOTE_COLORS: NoteColor[] = [
   '#3d1f33'
 ];
 
-const getRandomColor = (canvas: 1 | 2): NoteColor => {
-  const colors = canvas === 2 ? PINK_NOTE_COLORS : NOTE_COLORS;
+const getRandomColor = (canvasType: CanvasType): NoteColor => {
+  const colors = canvasType === 'project' ? PINK_NOTE_COLORS : NOTE_COLORS;
   return colors[Math.floor(Math.random() * colors.length)];
 };
 
@@ -80,20 +92,44 @@ const getMaxZIndex = (notes: StickyNote[]): number => {
   return Math.max(0, ...notes.map(n => n.zIndex));
 };
 
-const createNote = (position: Position, existingNotes: StickyNote[], canvas: 1 | 2): StickyNote => {
+const createNote = (position: Position, existingNotes: StickyNote[], canvasType: CanvasType): StickyNote => {
   const now = Date.now();
   return {
     id: `note-${now}-${Math.random().toString(36).substr(2, 9)}`,
     x: position.x,
     y: position.y,
     text: 'New Note',
-    color: getRandomColor(canvas),
+    color: getRandomColor(canvasType),
     width: 250,
     height: 200,
     rotation: 0,
     zIndex: getMaxZIndex(existingNotes) + 1,
     createdAt: now,
     updatedAt: now,
+  };
+};
+
+const createCanvasId = () => `canvas-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+const DEFAULT_IDEAS_CANVAS_ID = 'ideas';
+const DEFAULT_PROJECTS_CANVAS_ID = 'projects';
+
+const createDefaultCanvases = () => {
+  const now = Date.now();
+  const ideasMeta: CanvasMeta = { id: DEFAULT_IDEAS_CANVAS_ID, name: 'Ideas', type: 'idea', createdAt: now };
+  const projectsMeta: CanvasMeta = { id: DEFAULT_PROJECTS_CANVAS_ID, name: 'Projects', type: 'project', createdAt: now };
+  return {
+    canvases: {
+      [DEFAULT_IDEAS_CANVAS_ID]: [] as StickyNote[],
+      [DEFAULT_PROJECTS_CANVAS_ID]: [] as StickyNote[],
+    } as Record<CanvasId, StickyNote[]>,
+    canvasesMeta: {
+      [DEFAULT_IDEAS_CANVAS_ID]: ideasMeta,
+      [DEFAULT_PROJECTS_CANVAS_ID]: projectsMeta,
+    } as Record<CanvasId, CanvasMeta>,
+    canvasOrder: [DEFAULT_IDEAS_CANVAS_ID, DEFAULT_PROJECTS_CANVAS_ID] as CanvasId[],
+    activeCanvasId: DEFAULT_IDEAS_CANVAS_ID as CanvasId,
+    activeCanvasMeta: ideasMeta,
   };
 };
 
@@ -113,14 +149,11 @@ export const useNotesStore = create<NotesState>()(
     persist(
       (set, get) => ({
         // Initial state
-        canvases: {
-          1: [],
-          2: [],
-        },
-        activeCanvas: 1,
+        ...createDefaultCanvases(),
         notes: [],
         selectedNoteId: null,
         selectedNoteIds: [],
+        detailViewNoteId: null,
         pan: { x: 0, y: 0 },
         zoom: 1,
         isPanning: false,
@@ -128,21 +161,188 @@ export const useNotesStore = create<NotesState>()(
         historyIndex: 0,
 
         // Canvas switching
-        setActiveCanvas: (canvas) => set((state) => ({
-          activeCanvas: canvas,
-          notes: state.canvases[canvas],
-          selectedNoteId: null,
-          selectedNoteIds: [],
-        })),
+        setActiveCanvas: (canvasId) => set((state) => {
+          const meta = state.canvasesMeta[canvasId];
+          if (!meta) return state;
+          const notes = state.canvases[canvasId] ?? [];
+          return {
+            activeCanvasId: canvasId,
+            activeCanvasMeta: meta,
+            notes,
+            selectedNoteId: null,
+            selectedNoteIds: [],
+            detailViewNoteId: null,
+            history: [JSON.parse(JSON.stringify(notes))],
+            historyIndex: 0,
+          };
+        }),
+
+        addCanvas: ({ name, type }) => {
+          const id = createCanvasId();
+          const meta: CanvasMeta = { id, name, type, createdAt: Date.now() };
+          set((state) => ({
+            canvases: { ...state.canvases, [id]: [] },
+            canvasesMeta: { ...state.canvasesMeta, [id]: meta },
+            canvasOrder: [...state.canvasOrder, id],
+          }));
+          return id;
+        },
+
+        renameCanvas: (canvasId, name) => set((state) => {
+          const meta = state.canvasesMeta[canvasId];
+          if (!meta) return state;
+          const updatedMeta = { ...meta, name };
+          return {
+            canvasesMeta: {
+              ...state.canvasesMeta,
+              [canvasId]: updatedMeta,
+            },
+            activeCanvasMeta: state.activeCanvasId === canvasId ? updatedMeta : state.activeCanvasMeta,
+          };
+        }),
+
+        deleteCanvas: (canvasId) => set((state) => {
+          if (!state.canvasesMeta[canvasId]) return state;
+
+          const remainingIds = state.canvasOrder.filter(id => id !== canvasId);
+          if (remainingIds.length === 0) return state;
+
+          const { [canvasId]: _, ...remainingCanvases } = state.canvases;
+          const { [canvasId]: __, ...remainingMeta } = state.canvasesMeta;
+
+          const nextActiveId = state.activeCanvasId === canvasId ? remainingIds[0] : state.activeCanvasId;
+          const nextNotes = remainingCanvases[nextActiveId] ?? [];
+          const nextMeta = remainingMeta[nextActiveId];
+
+          return {
+            canvases: remainingCanvases,
+            canvasesMeta: remainingMeta,
+            canvasOrder: remainingIds,
+            activeCanvasId: nextActiveId,
+            activeCanvasMeta: nextMeta,
+            notes: nextNotes,
+            selectedNoteId: null,
+            selectedNoteIds: [],
+            detailViewNoteId: null,
+            history: [JSON.parse(JSON.stringify(nextNotes))],
+            historyIndex: 0,
+          };
+        }),
+
+        // Detail view
+        setDetailViewNoteId: (id) => set({ detailViewNoteId: id }),
+
+        // Attachments
+        addAttachment: (noteId, attachment) => set((state) => {
+          const currentNotes = state.canvases[state.activeCanvasId] ?? [];
+          const newAttachment = {
+            ...attachment,
+            id: `att-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            createdAt: Date.now(),
+          };
+          const newNotes = currentNotes.map(note =>
+            note.id === noteId
+              ? { ...note, attachments: [...(note.attachments || []), newAttachment], updatedAt: Date.now() }
+              : note
+          );
+          const newCanvases = {
+            ...state.canvases,
+            [state.activeCanvasId]: newNotes,
+          };
+          return {
+            canvases: newCanvases,
+            notes: newNotes,
+          };
+        }),
+
+        removeAttachment: (noteId, attachmentId) => set((state) => {
+          const currentNotes = state.canvases[state.activeCanvasId] ?? [];
+          const newNotes = currentNotes.map(note =>
+            note.id === noteId
+              ? { ...note, attachments: (note.attachments || []).filter(a => a.id !== attachmentId), updatedAt: Date.now() }
+              : note
+          );
+          const newCanvases = {
+            ...state.canvases,
+            [state.activeCanvasId]: newNotes,
+          };
+          return {
+            canvases: newCanvases,
+            notes: newNotes,
+          };
+        }),
+
+        // Tasks
+        addTask: (noteId, task) => set((state) => {
+          const currentNotes = state.canvases[state.activeCanvasId] ?? [];
+          const newTask = {
+            ...task,
+            id: `task-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            createdAt: Date.now(),
+          };
+          const newNotes = currentNotes.map(note =>
+            note.id === noteId
+              ? { ...note, tasks: [...(note.tasks || []), newTask], updatedAt: Date.now() }
+              : note
+          );
+          const newCanvases = {
+            ...state.canvases,
+            [state.activeCanvasId]: newNotes,
+          };
+          return {
+            canvases: newCanvases,
+            notes: newNotes,
+          };
+        }),
+
+        updateTask: (noteId, taskId, updates) => set((state) => {
+          const currentNotes = state.canvases[state.activeCanvasId] ?? [];
+          const newNotes = currentNotes.map(note =>
+            note.id === noteId
+              ? {
+                  ...note,
+                  tasks: (note.tasks || []).map(task =>
+                    task.id === taskId ? { ...task, ...updates } : task
+                  ),
+                  updatedAt: Date.now()
+                }
+              : note
+          );
+          const newCanvases = {
+            ...state.canvases,
+            [state.activeCanvasId]: newNotes,
+          };
+          return {
+            canvases: newCanvases,
+            notes: newNotes,
+          };
+        }),
+
+        removeTask: (noteId, taskId) => set((state) => {
+          const currentNotes = state.canvases[state.activeCanvasId] ?? [];
+          const newNotes = currentNotes.map(note =>
+            note.id === noteId
+              ? { ...note, tasks: (note.tasks || []).filter(t => t.id !== taskId), updatedAt: Date.now() }
+              : note
+          );
+          const newCanvases = {
+            ...state.canvases,
+            [state.activeCanvasId]: newNotes,
+          };
+          return {
+            canvases: newCanvases,
+            notes: newNotes,
+          };
+        }),
 
         // Note actions
         addNote: (position) => set((state) => {
-          const currentNotes = state.canvases[state.activeCanvas];
-          const newNote = createNote(position, currentNotes, state.activeCanvas);
+          const currentNotes = state.canvases[state.activeCanvasId] ?? [];
+          const newNote = createNote(position, currentNotes, state.activeCanvasMeta.type);
           const newNotes = [...currentNotes, newNote];
           const newCanvases = {
             ...state.canvases,
-            [state.activeCanvas]: newNotes,
+            [state.activeCanvasId]: newNotes,
           };
           const historyUpdate = saveToHistory(newNotes, state.history, state.historyIndex);
           return {
@@ -154,7 +354,7 @@ export const useNotesStore = create<NotesState>()(
         }),
 
         updateNote: (id, updates) => set((state) => {
-          const currentNotes = state.canvases[state.activeCanvas];
+          const currentNotes = state.canvases[state.activeCanvasId] ?? [];
           const newNotes = currentNotes.map(note =>
             note.id === id
               ? { ...note, ...updates, updatedAt: Date.now() }
@@ -162,7 +362,7 @@ export const useNotesStore = create<NotesState>()(
           );
           const newCanvases = {
             ...state.canvases,
-            [state.activeCanvas]: newNotes,
+            [state.activeCanvasId]: newNotes,
           };
           const historyUpdate = saveToHistory(newNotes, state.history, state.historyIndex);
           return {
@@ -173,11 +373,11 @@ export const useNotesStore = create<NotesState>()(
         }),
 
         deleteNote: (id) => set((state) => {
-          const currentNotes = state.canvases[state.activeCanvas];
+          const currentNotes = state.canvases[state.activeCanvasId] ?? [];
           const newNotes = currentNotes.filter(note => note.id !== id);
           const newCanvases = {
             ...state.canvases,
-            [state.activeCanvas]: newNotes,
+            [state.activeCanvasId]: newNotes,
           };
           const historyUpdate = saveToHistory(newNotes, state.history, state.historyIndex);
           return {
@@ -190,7 +390,7 @@ export const useNotesStore = create<NotesState>()(
         }),
 
         moveNote: (id, position) => set((state) => {
-          const currentNotes = state.canvases[state.activeCanvas];
+          const currentNotes = state.canvases[state.activeCanvasId] ?? [];
           const newNotes = currentNotes.map(note =>
             note.id === id
               ? { ...note, x: position.x, y: position.y, updatedAt: Date.now() }
@@ -198,7 +398,7 @@ export const useNotesStore = create<NotesState>()(
           );
           const newCanvases = {
             ...state.canvases,
-            [state.activeCanvas]: newNotes,
+            [state.activeCanvasId]: newNotes,
           };
           return {
             canvases: newCanvases,
@@ -221,14 +421,14 @@ export const useNotesStore = create<NotesState>()(
         clearSelection: () => set({ selectedNoteIds: [], selectedNoteId: null }),
 
         bringToFront: (id) => set((state) => {
-          const currentNotes = state.canvases[state.activeCanvas];
+          const currentNotes = state.canvases[state.activeCanvasId] ?? [];
           const maxZ = getMaxZIndex(currentNotes);
           const newNotes = currentNotes.map(note =>
             note.id === id ? { ...note, zIndex: maxZ + 1 } : note
           );
           const newCanvases = {
             ...state.canvases,
-            [state.activeCanvas]: newNotes,
+            [state.activeCanvasId]: newNotes,
           };
           return {
             canvases: newCanvases,
@@ -243,7 +443,7 @@ export const useNotesStore = create<NotesState>()(
           const duplicate = createNote(
             { x: original.x + 30, y: original.y + 30 },
             state.notes,
-            state.activeCanvas
+            state.activeCanvasMeta.type
           );
           const newNote = {
             ...duplicate,
@@ -253,9 +453,14 @@ export const useNotesStore = create<NotesState>()(
             height: original.height,
           };
           const newNotes = [...state.notes, newNote];
+          const newCanvases = {
+            ...state.canvases,
+            [state.activeCanvasId]: newNotes,
+          };
           const historyUpdate = saveToHistory(newNotes, state.history, state.historyIndex);
           
           return {
+            canvases: newCanvases,
             notes: newNotes,
             selectedNoteId: newNote.id,
             ...historyUpdate,
@@ -297,7 +502,12 @@ export const useNotesStore = create<NotesState>()(
         // Bulk operations
         deleteAllNotes: () => set((state) => {
           const historyUpdate = saveToHistory([], state.history, state.historyIndex);
+          const newCanvases = {
+            ...state.canvases,
+            [state.activeCanvasId]: [],
+          };
           return {
+            canvases: newCanvases,
             notes: [],
             selectedNoteId: null,
             ...historyUpdate,
@@ -313,7 +523,12 @@ export const useNotesStore = create<NotesState>()(
           try {
             const importedNotes = JSON.parse(data) as StickyNote[];
             const historyUpdate = saveToHistory(importedNotes, state.history, state.historyIndex);
+            const newCanvases = {
+              ...state.canvases,
+              [state.activeCanvasId]: importedNotes,
+            };
             return {
+              canvases: newCanvases,
               notes: importedNotes,
               ...historyUpdate,
             };
@@ -325,9 +540,46 @@ export const useNotesStore = create<NotesState>()(
       }),
       {
         name: 'sticky-notes-storage',
+        version: 2,
+        migrate: (persistedState: any, version) => {
+          if (version === 2) return persistedState;
+
+          const base = createDefaultCanvases();
+          try {
+            const oldCanvases = persistedState?.canvases;
+            const oldActiveCanvas = persistedState?.activeCanvas;
+
+            if (oldCanvases && (oldCanvases[1] || oldCanvases[2])) {
+              base.canvases[DEFAULT_IDEAS_CANVAS_ID] = oldCanvases[1] ?? [];
+              base.canvases[DEFAULT_PROJECTS_CANVAS_ID] = oldCanvases[2] ?? [];
+            }
+
+            if (oldActiveCanvas === 2) {
+              base.activeCanvasId = DEFAULT_PROJECTS_CANVAS_ID;
+              base.activeCanvasMeta = base.canvasesMeta[DEFAULT_PROJECTS_CANVAS_ID];
+            }
+
+            return {
+              ...base,
+              notes: base.canvases[base.activeCanvasId] ?? [],
+              pan: persistedState?.pan ?? { x: 0, y: 0 },
+              zoom: persistedState?.zoom ?? 1,
+            };
+          } catch {
+            return {
+              ...base,
+              notes: [],
+              pan: { x: 0, y: 0 },
+              zoom: 1,
+            };
+          }
+        },
         partialize: (state) => ({
           canvases: state.canvases,
-          activeCanvas: state.activeCanvas,
+          canvasesMeta: state.canvasesMeta,
+          canvasOrder: state.canvasOrder,
+          activeCanvasId: state.activeCanvasId,
+          activeCanvasMeta: state.activeCanvasMeta,
           pan: state.pan,
           zoom: state.zoom,
         }),
