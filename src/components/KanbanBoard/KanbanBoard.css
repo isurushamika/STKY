@@ -1,0 +1,81 @@
+.kanban-board {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.kanban-column {
+  background: rgba(255,255,255,0.02);
+  border: 1px solid rgba(255,255,255,0.04);
+  border-radius: 12px;
+  width: 320px;
+  min-height: 240px;
+  display: flex;
+  flex-direction: column;
+  padding: 12px;
+}
+
+.kanban-column-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.kanban-column-title {
+  font-weight: 700;
+}
+
+.kanban-column-count {
+  font-size: 12px;
+  opacity: 0.8;
+}
+
+.kanban-column-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.task-card {
+  background: rgba(0,0,0,0.35);
+  border: 1px solid rgba(255,255,255,0.04);
+  padding: 10px;
+  border-radius: 8px;
+  cursor: grab;
+}
+
+.task-card-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.task-color {
+  width: 10px;
+  height: 30px;
+  border-radius: 4px;
+}
+
+.task-title {
+  font-weight: 600;
+}
+
+.task-meta {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+  align-items: center;
+}
+
+.priority-badge {
+  padding: 4px 8px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.task-time {
+  font-size: 12px;
+  opacity: 0.8;
+}

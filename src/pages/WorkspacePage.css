@@ -1,0 +1,16 @@
+.workspace-page {
+  padding: 20px;
+}
+
+.workspace-header {
+  margin-bottom: 12px;
+}
+
+.workspace-sub {
+  color: rgba(255,255,255,0.6);
+  margin-top: 4px;
+}
+
+.workspace-main {
+  margin-top: 16px;
+}

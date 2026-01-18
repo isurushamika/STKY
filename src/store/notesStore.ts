@@ -59,6 +59,15 @@ interface NotesState {
   deleteAllNotes: () => void;
   exportNotes: () => string;
   importNotes: (data: string) => void;
+  // Subtasks and time tracking
+  addSubtask: (noteId: string, taskId: string, title: string) => void;
+  toggleSubtask: (noteId: string, taskId: string, subtaskId: string) => void;
+  startTimeEntry: (noteId: string, taskId: string, source?: 'pomodoro' | 'manual', note?: string) => void;
+  stopTimeEntry: (noteId: string, taskId: string, entryId?: string) => void;
+  // Task helpers
+  moveTask: (noteId: string, taskId: string, status: import('../types').Task['status'], order?: number) => void;
+  reorderTask: (noteId: string, taskId: string, newOrder: number) => void;
+  bulkUpdateTasks: (noteId: string, taskIds: string[], updates: Partial<import('../types').Task>) => void;
 }
 
 const NOTE_COLORS: NoteColor[] = [
@@ -110,6 +119,108 @@ const createNote = (position: Position, existingNotes: StickyNote[], canvasType:
 };
 
 const createCanvasId = () => `canvas-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+const createTaskColor = (): string => {
+  const hue = Math.floor(Math.random() * 360);
+  return `hsl(${hue} 90% 55%)`;
+};
+
+const getTaskStatus = (task: Partial<import('../types').Task> | undefined) => {
+  return (task?.status ?? 'not-started') as import('../types').Task['status'];
+};
+
+const getNextTaskOrder = (tasks: Array<Partial<import('../types').Task>> | undefined, status: import('../types').Task['status']) => {
+  const list = tasks ?? [];
+  const max = list.reduce((m, t) => {
+    if (getTaskStatus(t) !== status) return m;
+    return Math.max(m, typeof t.order === 'number' ? t.order : 0);
+  }, 0);
+  return max + 1;
+};
+
+const normalizePersistedTasksV3 = (state: any) => {
+  const canvases = state?.canvases;
+  if (!canvases || typeof canvases !== 'object') return state;
+
+  const nextCanvases: Record<string, StickyNote[]> = {};
+
+  for (const canvasId of Object.keys(canvases)) {
+    const notes = Array.isArray(canvases[canvasId]) ? (canvases[canvasId] as StickyNote[]) : [];
+    nextCanvases[canvasId] = notes.map((note) => {
+      const tasks = note.tasks ?? [];
+      if (tasks.length === 0) return note;
+
+      const counters: Record<import('../types').Task['status'], number> = {
+        'not-started': 0,
+        'in-progress': 0,
+        'completed': 0,
+      };
+
+      const normalizedTasks = tasks.map((t) => {
+        const status = (t.status ?? 'not-started') as import('../types').Task['status'];
+        const order = typeof t.order === 'number' ? t.order : (counters[status] += 1);
+        if (typeof t.order !== 'number') counters[status] = order;
+
+        return {
+          ...t,
+          color: t.color ?? createTaskColor(),
+          priority: t.priority ?? 'medium',
+          dueDate: t.dueDate ?? t.endDate,
+          order,
+          status,
+          timeSpentMs: typeof (t as any).timeSpentMs === 'number' ? (t as any).timeSpentMs : 0,
+          pomodorosCompleted: typeof (t as any).pomodorosCompleted === 'number' ? (t as any).pomodorosCompleted : 0,
+        };
+      });
+
+      return { ...note, tasks: normalizedTasks };
+    });
+  }
+
+  const activeCanvasId = state?.activeCanvasId;
+  return {
+    ...state,
+    canvases: nextCanvases,
+    notes: activeCanvasId && nextCanvases[activeCanvasId] ? nextCanvases[activeCanvasId] : state?.notes,
+  };
+};
+
+const normalizePersistedTasksV4 = (state: any) => {
+  // start from V3 normalization then ensure new fields exist
+  const v3 = normalizePersistedTasksV3(state);
+  const canvases = v3?.canvases;
+  if (!canvases || typeof canvases !== 'object') return v3;
+
+  const nextCanvases: Record<string, StickyNote[]> = {};
+
+  for (const canvasId of Object.keys(canvases)) {
+    const notes = Array.isArray(canvases[canvasId]) ? (canvases[canvasId] as StickyNote[]) : [];
+    nextCanvases[canvasId] = notes.map((note) => {
+      const tasks = note.tasks ?? [];
+      if (!tasks || tasks.length === 0) return { ...note, tasks: [], updatedAt: note.updatedAt };
+
+      const normalizedTasks = tasks.map((t) => ({
+        ...t,
+        tags: Array.isArray((t as any).tags) ? (t as any).tags : [],
+        subtasks: Array.isArray((t as any).subtasks) ? (t as any).subtasks : [],
+        estimateHours: typeof (t as any).estimateHours === 'number' ? (t as any).estimateHours : undefined,
+        assigneeId: typeof (t as any).assigneeId === 'string' ? (t as any).assigneeId : undefined,
+        timeEntries: Array.isArray((t as any).timeEntries) ? (t as any).timeEntries : [],
+        timeSpentMs: typeof (t as any).timeSpentMs === 'number' ? (t as any).timeSpentMs : 0,
+        pomodorosCompleted: typeof (t as any).pomodorosCompleted === 'number' ? (t as any).pomodorosCompleted : 0,
+      }));
+
+      return { ...note, tasks: normalizedTasks };
+    });
+  }
+
+  const activeCanvasId = v3?.activeCanvasId;
+  return {
+    ...v3,
+    canvases: nextCanvases,
+    notes: activeCanvasId && nextCanvases[activeCanvasId] ? nextCanvases[activeCanvasId] : v3?.notes,
+  };
+};
 
 const DEFAULT_IDEAS_CANVAS_ID = 'ideas';
 const DEFAULT_PROJECTS_CANVAS_ID = 'projects';
@@ -275,15 +386,28 @@ export const useNotesStore = create<NotesState>()(
         // Tasks
         addTask: (noteId, task) => set((state) => {
           const currentNotes = state.canvases[state.activeCanvasId] ?? [];
-          const newTask = {
-            ...task,
-            id: `task-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-            createdAt: Date.now(),
-          };
+          const now = Date.now();
           const newNotes = currentNotes.map(note =>
-            note.id === noteId
-              ? { ...note, tasks: [...(note.tasks || []), newTask], updatedAt: Date.now() }
-              : note
+            note.id === noteId ? (() => {
+              const existingTasks = note.tasks || [];
+              const status = (task.status ?? 'not-started') as import('../types').Task['status'];
+              const order = typeof task.order === 'number' ? task.order : getNextTaskOrder(existingTasks, status);
+
+              const newTask = {
+                ...task,
+                id: `task-${now}-${Math.random().toString(36).substr(2, 9)}`,
+                createdAt: now,
+                color: task.color ?? createTaskColor(),
+                priority: task.priority ?? 'medium',
+                dueDate: task.dueDate ?? task.endDate,
+                order,
+                status,
+                timeSpentMs: typeof (task as any).timeSpentMs === 'number' ? (task as any).timeSpentMs : 0,
+                pomodorosCompleted: typeof (task as any).pomodorosCompleted === 'number' ? (task as any).pomodorosCompleted : 0,
+              };
+
+              return { ...note, tasks: [...existingTasks, newTask], updatedAt: now };
+            })() : note
           );
           const newCanvases = {
             ...state.canvases,
@@ -302,7 +426,33 @@ export const useNotesStore = create<NotesState>()(
               ? {
                   ...note,
                   tasks: (note.tasks || []).map(task =>
-                    task.id === taskId ? { ...task, ...updates } : task
+                    task.id === taskId ? (() => {
+                      const nextStatus = (updates.status ?? task.status ?? 'not-started') as import('../types').Task['status'];
+                      const currentStatus = (task.status ?? 'not-started') as import('../types').Task['status'];
+                      let nextOrder = updates.order ?? task.order;
+
+                      if (updates.status && updates.status !== currentStatus && updates.order === undefined) {
+                        nextOrder = getNextTaskOrder(note.tasks || [], nextStatus);
+                      }
+
+                      return {
+                        ...task,
+                        ...updates,
+                        status: nextStatus,
+                        order: nextOrder,
+                        priority: (updates as any).priority ?? task.priority ?? 'medium',
+                        dueDate: (updates as any).dueDate ?? task.dueDate ?? task.endDate,
+                        color: task.color ?? createTaskColor(),
+                        timeSpentMs:
+                          typeof (updates as any).timeSpentMs === 'number'
+                            ? (updates as any).timeSpentMs
+                            : (typeof (task as any).timeSpentMs === 'number' ? (task as any).timeSpentMs : 0),
+                        pomodorosCompleted:
+                          typeof (updates as any).pomodorosCompleted === 'number'
+                            ? (updates as any).pomodorosCompleted
+                            : (typeof (task as any).pomodorosCompleted === 'number' ? (task as any).pomodorosCompleted : 0),
+                      };
+                    })() : task
                   ),
                   updatedAt: Date.now()
                 }
@@ -333,6 +483,175 @@ export const useNotesStore = create<NotesState>()(
             canvases: newCanvases,
             notes: newNotes,
           };
+        }),
+
+        // Subtasks
+        addSubtask: (noteId, taskId, title) => set((state) => {
+          const currentNotes = state.canvases[state.activeCanvasId] ?? [];
+          const now = Date.now();
+          const newNotes = currentNotes.map(note =>
+            note.id === noteId
+              ? {
+                  ...note,
+                  tasks: (note.tasks || []).map(task =>
+                    task.id === taskId
+                      ? { ...task, subtasks: [...(task.subtasks || []), { id: `sub-${now}-${Math.random().toString(36).slice(2,8)}`, title, done: false }], updatedAt: Date.now() }
+                      : task
+                  ),
+                  updatedAt: now,
+                }
+              : note
+          );
+          const newCanvases = { ...state.canvases, [state.activeCanvasId]: newNotes };
+          return { canvases: newCanvases, notes: newNotes };
+        }),
+
+        toggleSubtask: (noteId, taskId, subtaskId) => set((state) => {
+          const currentNotes = state.canvases[state.activeCanvasId] ?? [];
+          const now = Date.now();
+          const newNotes = currentNotes.map(note =>
+            note.id === noteId
+              ? {
+                  ...note,
+                  tasks: (note.tasks || []).map(task =>
+                    task.id === taskId
+                      ? {
+                          ...task,
+                          subtasks: (task.subtasks || []).map(s => s.id === subtaskId ? { ...s, done: !s.done } : s),
+                        }
+                      : task
+                  ),
+                  updatedAt: now,
+                }
+              : note
+          );
+          const newCanvases = { ...state.canvases, [state.activeCanvasId]: newNotes };
+          return { canvases: newCanvases, notes: newNotes };
+        }),
+
+        // Time entries (start/stop)
+        startTimeEntry: (noteId, taskId, source = 'manual', entryNote) => set((state) => {
+          const currentNotes = state.canvases[state.activeCanvasId] ?? [];
+          const now = Date.now();
+          const newNotes = currentNotes.map(note =>
+            note.id === noteId
+              ? {
+                  ...note,
+                  tasks: (note.tasks || []).map(task => {
+                    if (task.id !== taskId) return task;
+                    // avoid starting another running entry
+                    const running = (task.timeEntries || []).some(te => te.endedAt === undefined);
+                    if (running) return task;
+                    const newEntry = { id: `te-${now}-${Math.random().toString(36).slice(2,8)}`, startedAt: now, source, note: entryNote };
+                    return { ...task, timeEntries: [...(task.timeEntries || []), newEntry] };
+                  }),
+                  updatedAt: now,
+                }
+              : note
+          );
+          const newCanvases = { ...state.canvases, [state.activeCanvasId]: newNotes };
+          return { canvases: newCanvases, notes: newNotes };
+        }),
+
+        stopTimeEntry: (noteId, taskId, entryId) => set((state) => {
+          const currentNotes = state.canvases[state.activeCanvasId] ?? [];
+          const now = Date.now();
+          const newNotes = currentNotes.map(note =>
+            note.id === noteId
+              ? {
+                  ...note,
+                  tasks: (note.tasks || []).map(task => {
+                    if (task.id !== taskId) return task;
+
+                    const entries = (task.timeEntries || []).map(te => {
+                      if (entryId) {
+                        return te.id === entryId && te.endedAt === undefined ? { ...te, endedAt: now } : te;
+                      }
+                      // stop last running
+                      return te.endedAt === undefined ? { ...te, endedAt: now } : te;
+                    });
+
+                    const addedMs = entries.reduce((acc, te) => {
+                      if (typeof te.startedAt === 'number' && typeof te.endedAt === 'number') {
+                        // if this entry just got ended, include it
+                        acc += Math.max(0, te.endedAt - te.startedAt);
+                      }
+                      return acc;
+                    }, 0);
+
+                    const nextTimeSpent = (task.timeSpentMs ?? 0) + addedMs;
+
+                    return { ...task, timeEntries: entries, timeSpentMs: nextTimeSpent };
+                  }),
+                  updatedAt: now,
+                }
+              : note
+          );
+          const newCanvases = { ...state.canvases, [state.activeCanvasId]: newNotes };
+          return { canvases: newCanvases, notes: newNotes };
+        }),
+
+        moveTask: (noteId, taskId, status, order) => set((state) => {
+          // reuse updateTask logic but ensure order set
+          const currentNotes = state.canvases[state.activeCanvasId] ?? [];
+          const newNotes = currentNotes.map(note =>
+            note.id === noteId
+              ? {
+                  ...note,
+                  tasks: (note.tasks || []).map(task =>
+                    task.id === taskId ? { ...task, status, order: typeof order === 'number' ? order : task.order } : task
+                  ),
+                  updatedAt: Date.now(),
+                }
+              : note
+          );
+          const newCanvases = { ...state.canvases, [state.activeCanvasId]: newNotes };
+          return { canvases: newCanvases, notes: newNotes };
+        }),
+
+        reorderTask: (noteId, taskId, newOrder) => set((state) => {
+          const currentNotes = state.canvases[state.activeCanvasId] ?? [];
+          const now = Date.now();
+          const newNotes = currentNotes.map(note => {
+            if (note.id !== noteId) return note;
+            const tasks = (note.tasks || []).slice();
+            const target = tasks.find(t => t.id === taskId);
+            if (!target) return note;
+            const fromOrder = target.order ?? 0;
+            // clamp
+            const toOrder = Math.max(1, newOrder);
+            // shift others
+            const updated = tasks.map(t => {
+              if (t.id === taskId) return { ...t, order: toOrder };
+              if (typeof t.order !== 'number') return t;
+              if (fromOrder < toOrder) {
+                // moved down
+                if (t.order > fromOrder && t.order <= toOrder) return { ...t, order: t.order - 1 };
+              } else if (fromOrder > toOrder) {
+                if (t.order >= toOrder && t.order < fromOrder) return { ...t, order: t.order + 1 };
+              }
+              return t;
+            });
+            return { ...note, tasks: updated, updatedAt: now };
+          });
+          const newCanvases = { ...state.canvases, [state.activeCanvasId]: newNotes };
+          return { canvases: newCanvases, notes: newNotes };
+        }),
+
+        bulkUpdateTasks: (noteId, taskIds, updates) => set((state) => {
+          const currentNotes = state.canvases[state.activeCanvasId] ?? [];
+          const now = Date.now();
+          const newNotes = currentNotes.map(note =>
+            note.id === noteId
+              ? {
+                  ...note,
+                  tasks: (note.tasks || []).map(task => taskIds.includes(task.id) ? { ...task, ...updates } : task),
+                  updatedAt: now,
+                }
+              : note
+          );
+          const newCanvases = { ...state.canvases, [state.activeCanvasId]: newNotes };
+          return { canvases: newCanvases, notes: newNotes };
         }),
 
         // Note actions
@@ -540,9 +859,12 @@ export const useNotesStore = create<NotesState>()(
       }),
       {
         name: 'sticky-notes-storage',
-        version: 2,
+        version: 5,
         migrate: (persistedState: any, version) => {
-          if (version === 2) return persistedState;
+          if (version === 5) return persistedState;
+          if (version === 4) return normalizePersistedTasksV4(persistedState);
+          if (version === 3) return normalizePersistedTasksV3(persistedState);
+          if (version === 2) return normalizePersistedTasksV3(persistedState);
 
           const base = createDefaultCanvases();
           try {
@@ -559,19 +881,21 @@ export const useNotesStore = create<NotesState>()(
               base.activeCanvasMeta = base.canvasesMeta[DEFAULT_PROJECTS_CANVAS_ID];
             }
 
-            return {
+            const migratedToV2 = {
               ...base,
               notes: base.canvases[base.activeCanvasId] ?? [],
               pan: persistedState?.pan ?? { x: 0, y: 0 },
               zoom: persistedState?.zoom ?? 1,
             };
+
+            return normalizePersistedTasksV3(migratedToV2);
           } catch {
-            return {
+            return normalizePersistedTasksV3({
               ...base,
               notes: [],
               pan: { x: 0, y: 0 },
               zoom: 1,
-            };
+            });
           }
         },
         partialize: (state) => ({

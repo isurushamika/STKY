@@ -9,9 +9,6 @@
 }
 
 .settings-button {
-  position: absolute;
-  top: 16px;
-  right: 16px;
   width: 44px;
   height: 44px;
   border-radius: 12px;
@@ -26,6 +23,37 @@
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+}
+
+.top-controls {
+  position: fixed;
+  top: 14px;
+  right: 14px;
+  display: flex;
+  gap: 10px;
+  z-index: 2500;
+}
+
+.view-switch-button {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: rgba(0, 0, 0, 0.22);
+  color: var(--text);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  backdrop-filter: blur(10px);
+}
+
+html[data-theme='light'] .view-switch-button {
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.view-switch-button:hover {
+  border-color: var(--border-strong);
 }
 
 html[data-theme='light'] .settings-button {

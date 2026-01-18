@@ -42,12 +42,18 @@ const GanttChart: React.FC<GanttChartProps> = ({ tasks, onTaskClick }) => {
     };
   };
 
-  const getStatusColor = (status: Task['status']) => {
-    switch (status) {
-      case 'completed': return '#10b981';
-      case 'in-progress': return '#3b82f6';
-      case 'not-started': return '#6b7280';
+  const hashStringToHue = (value: string) => {
+    let hash = 0;
+    for (let i = 0; i < value.length; i++) {
+      hash = (hash * 31 + value.charCodeAt(i)) | 0;
     }
+    return Math.abs(hash) % 360;
+  };
+
+  const getTaskColor = (task: Task) => {
+    if (task.color) return task.color;
+    const hue = hashStringToHue(task.id);
+    return `hsl(${hue} 90% 55%)`;
   };
 
   // Generate timeline markers
@@ -102,7 +108,7 @@ const GanttChart: React.FC<GanttChartProps> = ({ tasks, onTaskClick }) => {
                   className={`task-bar status-${task.status}`}
                   style={{
                     ...position,
-                    backgroundColor: getStatusColor(task.status),
+                    backgroundColor: getTaskColor(task),
                   }}
                 >
                   <div className="task-progress" style={{ width: `${task.progress}%` }}></div>

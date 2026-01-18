@@ -27,8 +27,27 @@ export interface Task {
   name: string;
   startDate: string;
   endDate: string;
+  dueDate?: string;
   progress: number;
   status: 'not-started' | 'in-progress' | 'completed';
+  priority?: 'low' | 'medium' | 'high' | 'urgent';
+  order?: number;
+  color?: string;
+  timeSpentMs?: number;
+  pomodorosCompleted?: number;
+  // New optional fields for richer project management
+  tags?: string[];
+  subtasks?: Array<{ id: string; title: string; done?: boolean }>;
+  estimateHours?: number;
+  assigneeId?: string;
+  // Time entries provide a durable record of started/stopped work sessions
+  timeEntries?: Array<{
+    id: string;
+    startedAt: number; // epoch ms
+    endedAt?: number; // epoch ms | undefined when running
+    source?: 'pomodoro' | 'manual';
+    note?: string;
+  }>;
   createdAt: number;
 }
 
