@@ -800,6 +800,66 @@ html[data-theme='light'] .drop-zone-text {
   border-radius: 999px;
 }
 
+/* Reminders */
+.reminders-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.reminder-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: rgba(255,255,255,0.02);
+  border: 1px solid rgba(255,255,255,0.04);
+  padding: 8px 12px;
+  border-radius: 8px;
+}
+
+.reminder-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.reminder-time {
+  font-size: 13px;
+  color: rgba(255,255,255,0.85);
+}
+
+.reminder-msg {
+  font-size: 12px;
+  color: rgba(255,255,255,0.6);
+}
+
+.reminder-actions button {
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.06);
+  color: rgba(255,255,255,0.8);
+  padding: 6px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.add-reminder-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.reminder-datetime,
+.reminder-message {
+  background: rgba(0,0,0,0.25);
+  border: 1px solid rgba(255,255,255,0.06);
+  color: rgba(255,255,255,0.9);
+  padding: 8px 10px;
+  border-radius: 6px;
+}
+
+
 .task-column-body {
   display: flex;
   flex-direction: column;

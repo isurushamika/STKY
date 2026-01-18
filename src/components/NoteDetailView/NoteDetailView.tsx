@@ -8,7 +8,7 @@ import './NoteDetailView.css';
 type ActiveTab = 'content' | 'attachments' | 'timeline' | 'tasks' | 'resources';
 
 const NoteDetailView: React.FC = () => {
-  const { detailViewNoteId, notes, activeCanvasMeta, setDetailViewNoteId, addAttachment, removeAttachment, updateNote, addTask, updateTask, removeTask, addSubtask, toggleSubtask, startTimeEntry, stopTimeEntry, users } = useNotesStore();
+  const { detailViewNoteId, notes, activeCanvasMeta, setDetailViewNoteId, addAttachment, removeAttachment, updateNote, addTask, updateTask, removeTask, addSubtask, toggleSubtask, startTimeEntry, stopTimeEntry, addReminder, removeReminder, users } = useNotesStore();
   const [newLinkUrl, setNewLinkUrl] = useState('');
   const [newLinkName, setNewLinkName] = useState('');
   const [activeTab, setActiveTab] = useState<ActiveTab>(() => (activeCanvasMeta.type === 'project' ? 'timeline' : 'content'));
@@ -21,6 +21,9 @@ const NoteDetailView: React.FC = () => {
   const [tasksView, setTasksView] = useState<'board' | 'list'>('board');
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
+  const [newReminderWhen, setNewReminderWhen] = useState<string>(() => new Date(Date.now() + 5 * 60 * 1000).toISOString().slice(0,16));
+  const [newReminderMessage, setNewReminderMessage] = useState('');
+  const [newReminderRecurrence, setNewReminderRecurrence] = useState<'none'|'daily'|'weekly'|'monthly'>('none');
   const [pomodoroTask, setPomodoroTask] = useState<Task | null>(null);
   const pomodoroTaskRef = useRef<Task | null>(null);
 
@@ -1055,6 +1058,72 @@ const NoteDetailView: React.FC = () => {
                       }
                     }}>Stop running entry</button>
                   )}
+                </div>
+              </div>
+
+              <div className="editor-field">
+                <label>Reminders</label>
+                <div className="reminders-list">
+                  {(editingTask.reminders || []).map((r: any) => (
+                    <div key={r.id} className="reminder-item">
+                      <div className="reminder-meta">
+                        <span className="reminder-time">{r.when ? new Date(r.when).toLocaleString() : '—'}</span>
+                        <span className="reminder-msg">{r.message ?? ''}</span>
+                      </div>
+                      <div className="reminder-actions">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            try { removeReminder(note.id, editingTask.id, r.id); } catch (err) {}
+                            const freshNote = notes.find(n => n.id === note.id);
+                            const freshTask = freshNote?.tasks?.find((t: any) => t.id === editingTask.id);
+                            if (freshTask) setEditingTask(freshTask);
+                          }}
+                        >Delete</button>
+                      </div>
+                    </div>
+                  ))}
+
+                  <div className="add-reminder-row">
+                    <input
+                      type="datetime-local"
+                      value={newReminderWhen}
+                      onChange={(e) => setNewReminderWhen(e.target.value)}
+                      className="reminder-datetime"
+                    />
+                    <select
+                      value={newReminderRecurrence}
+                      onChange={(e) => setNewReminderRecurrence(e.target.value as any)}
+                      className="reminder-recurrence"
+                    >
+                      <option value="none">None</option>
+                      <option value="daily">Daily</option>
+                      <option value="weekly">Weekly</option>
+                      <option value="monthly">Monthly</option>
+                    </select>
+                    <input
+                      type="text"
+                      placeholder="Message (optional)"
+                      value={newReminderMessage}
+                      onChange={(e) => setNewReminderMessage(e.target.value)}
+                      className="reminder-message"
+                    />
+                    <button
+                      type="button"
+                      className="add-button"
+                      onClick={() => {
+                        const when = new Date(newReminderWhen).getTime();
+                        if (!when || Number.isNaN(when)) return;
+                        try { addReminder(note.id, editingTask.id, when, newReminderMessage || undefined, newReminderRecurrence); } catch (err) {}
+                        const freshNote = notes.find(n => n.id === note.id);
+                        const freshTask = freshNote?.tasks?.find((t: any) => t.id === editingTask.id);
+                        if (freshTask) setEditingTask(freshTask);
+                        setNewReminderMessage('');
+                        setNewReminderRecurrence('none');
+                        setNewReminderWhen(new Date(Date.now() + 5 * 60 * 1000).toISOString().slice(0,16));
+                      }}
+                    >Add</button>
+                  </div>
                 </div>
               </div>
             </div>

@@ -16,6 +16,9 @@ const TaskCard: React.FC<{ task: any }> = ({ task }) => {
       <div className="task-card-top">
         <span className="task-color" style={{ background: task.color || '#6b7280' }} />
         <div className="task-title">{task.name}</div>
+        {Array.isArray(task.reminders) && task.reminders.some((r: any) => !r.fired && typeof r.when === 'number' && r.when <= Date.now()) && (
+          <span className="task-reminder-dot" title="Reminder due" />
+        )}
       </div>
       <div className="task-meta">
         <span className={`priority-badge priority-${task.priority ?? 'medium'}`}>{(task.priority ?? 'medium').toUpperCase()}</span>

@@ -66,6 +66,9 @@ interface NotesState {
   toggleSubtask: (noteId: string, taskId: string, subtaskId: string) => void;
   startTimeEntry: (noteId: string, taskId: string, source?: 'pomodoro' | 'manual', note?: string) => void;
   stopTimeEntry: (noteId: string, taskId: string, entryId?: string) => void;
+  // Reminders
+  addReminder: (noteId: string, taskId: string, when: number, message?: string, recurrence?: 'none' | 'daily' | 'weekly' | 'monthly') => void;
+  removeReminder: (noteId: string, taskId: string, reminderId: string) => void;
   // Task helpers
   moveTask: (noteId: string, taskId: string, status: import('../types').Task['status'], order?: number) => void;
   reorderTask: (noteId: string, taskId: string, newOrder: number) => void;
@@ -214,6 +217,7 @@ const normalizePersistedTasksV4 = (state: any) => {
         timeEntries: Array.isArray((t as any).timeEntries) ? (t as any).timeEntries : [],
         timeSpentMs: typeof (t as any).timeSpentMs === 'number' ? (t as any).timeSpentMs : 0,
         pomodorosCompleted: typeof (t as any).pomodorosCompleted === 'number' ? (t as any).pomodorosCompleted : 0,
+        reminders: Array.isArray((t as any).reminders) ? (t as any).reminders.map((r:any) => ({ id: r.id, when: r.when, message: r.message, fired: !!r.fired, recurrence: r.recurrence ?? 'none' })) : [],
       }));
 
       return { ...note, tasks: normalizedTasks };
@@ -359,6 +363,47 @@ export const useNotesStore = create<NotesState>()(
         },
         updateUser: (id, updates) => set((state) => ({ users: (state.users || []).map(u => u.id === id ? { ...u, ...updates } : u) })),
         removeUser: (id) => set((state) => ({ users: (state.users || []).filter(u => u.id !== id) })),
+
+        // Reminders
+        addReminder: (noteId, taskId, when, message, recurrence = 'none') => set((state) => {
+          const currentNotes = state.canvases[state.activeCanvasId] ?? [];
+          const now = Date.now();
+          const newNotes = currentNotes.map(note =>
+            note.id === noteId
+              ? {
+                  ...note,
+                  tasks: (note.tasks || []).map(task =>
+                    task.id === taskId
+                      ? { ...task, reminders: [...(task.reminders || []), { id: `rem-${now}-${Math.random().toString(36).slice(2,8)}`, when, message, fired: false, recurrence }], updatedAt: Date.now() }
+                      : task
+                  ),
+                  updatedAt: now,
+                }
+              : note
+          );
+          const newCanvases = { ...state.canvases, [state.activeCanvasId]: newNotes };
+          return { canvases: newCanvases, notes: newNotes };
+        }),
+
+        removeReminder: (noteId, taskId, reminderId) => set((state) => {
+          const currentNotes = state.canvases[state.activeCanvasId] ?? [];
+          const now = Date.now();
+          const newNotes = currentNotes.map(note =>
+            note.id === noteId
+              ? {
+                  ...note,
+                  tasks: (note.tasks || []).map(task =>
+                    task.id === taskId
+                      ? { ...task, reminders: (task.reminders || []).filter(r => r.id !== reminderId), updatedAt: Date.now() }
+                      : task
+                  ),
+                  updatedAt: now,
+                }
+              : note
+          );
+          const newCanvases = { ...state.canvases, [state.activeCanvasId]: newNotes };
+          return { canvases: newCanvases, notes: newNotes };
+        }),
 
         // Detail view
         setDetailViewNoteId: (id) => set({ detailViewNoteId: id }),

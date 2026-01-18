@@ -68,6 +68,15 @@
   align-items: center;
 }
 
+.task-reminder-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #f97316; /* orange */
+  margin-left: 8px;
+  box-shadow: 0 0 0 4px rgba(249,115,22,0.08);
+}
+
 .priority-badge {
   padding: 4px 8px;
   border-radius: 8px;

@@ -48,6 +48,13 @@ export interface Task {
     source?: 'pomodoro' | 'manual';
     note?: string;
   }>;
+  reminders?: Array<{
+    id: string;
+    when: number; // epoch ms
+    message?: string;
+    fired?: boolean;
+    recurrence?: 'none' | 'daily' | 'weekly' | 'monthly';
+  }>;
   createdAt: number;
 }
 

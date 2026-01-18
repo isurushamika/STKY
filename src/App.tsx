@@ -4,6 +4,12 @@ import CanvasPage from './pages/CanvasPage';
 import DashboardPage from './pages/DashboardPage';
 import WorkspacePage from './pages/WorkspacePage';
 import './App.css';
+import NotificationCenter from './components/NotificationCenter/NotificationCenter';
+
+// Register basic service worker for notification delivery
+if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+  navigator.serviceWorker.register('/sw.js').catch(() => {});
+}
 
 type ThemeMode = 'dark' | 'light';
 
@@ -126,6 +132,24 @@ const App: React.FC = () => {
             </label>
           </div>
         </div>
+        <div className="settings-section">
+          <div className="settings-row">
+            <div className="settings-label">
+              <div className="settings-label-title">Reminders</div>
+              <div className="settings-label-sub">Default snooze minutes</div>
+            </div>
+
+            <label className="theme-toggle">
+              <input
+                type="number"
+                min={1}
+                max={1440}
+                defaultValue={Number(localStorage.getItem('stky-default-snooze') || '5')}
+                onBlur={(e) => { try { localStorage.setItem('stky-default-snooze', String(Math.max(1, Number(e.currentTarget.value || 5)))); } catch {} }}
+              />
+            </label>
+          </div>
+        </div>
       </aside>
 
       <Routes>
@@ -134,6 +158,7 @@ const App: React.FC = () => {
         <Route path="/workspace" element={<WorkspacePage />} />
         <Route path="*" element={<CanvasPage theme={theme} />} />
       </Routes>
+      <NotificationCenter />
     </>
   );
 };

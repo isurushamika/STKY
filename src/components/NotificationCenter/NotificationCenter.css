@@ -1,0 +1,86 @@
+.notification-center {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 9999;
+}
+
+.notification-item {
+  background: var(--panel-bg, #111827);
+  color: var(--text, #fff);
+  padding: 10px 12px;
+  border-radius: 8px;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.35);
+  min-width: 220px;
+}
+
+.notification-message {
+  font-size: 13px;
+  margin-bottom: 6px;
+}
+
+.notification-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.notification-actions button {
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.08);
+  color: inherit;
+  padding: 6px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.notification-permission {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(255,255,255,0.02);
+  border: 1px solid rgba(255,255,255,0.04);
+  padding: 10px 12px;
+  border-radius: 8px;
+}
+
+.permission-text {
+  font-size: 13px;
+  color: rgba(255,255,255,0.9);
+}
+
+.permission-actions button {
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.08);
+  color: rgba(255,255,255,0.9);
+  padding: 6px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.notification-header {
+  display:flex;
+  gap:12px;
+  align-items:center;
+}
+
+.notification-actions-global button {
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.06);
+  color: rgba(255,255,255,0.9);
+  padding: 6px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.notification-actions button {
+  margin-left: 8px;
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.06);
+  color: rgba(255,255,255,0.9);
+  padding: 6px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+}
