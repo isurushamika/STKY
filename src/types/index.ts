@@ -51,6 +51,13 @@ export interface Task {
   createdAt: number;
 }
 
+export interface User {
+  id: string;
+  name: string;
+  email?: string;
+  avatarUrl?: string;
+}
+
 export interface Position {
   x: number;
   y: number;

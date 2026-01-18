@@ -8,7 +8,7 @@ import './NoteDetailView.css';
 type ActiveTab = 'content' | 'attachments' | 'timeline' | 'tasks' | 'resources';
 
 const NoteDetailView: React.FC = () => {
-  const { detailViewNoteId, notes, activeCanvasMeta, setDetailViewNoteId, addAttachment, removeAttachment, updateNote, addTask, updateTask, removeTask, addSubtask, toggleSubtask, startTimeEntry, stopTimeEntry } = useNotesStore();
+  const { detailViewNoteId, notes, activeCanvasMeta, setDetailViewNoteId, addAttachment, removeAttachment, updateNote, addTask, updateTask, removeTask, addSubtask, toggleSubtask, startTimeEntry, stopTimeEntry, users } = useNotesStore();
   const [newLinkUrl, setNewLinkUrl] = useState('');
   const [newLinkName, setNewLinkName] = useState('');
   const [activeTab, setActiveTab] = useState<ActiveTab>(() => (activeCanvasMeta.type === 'project' ? 'timeline' : 'content'));
@@ -943,6 +943,24 @@ const NoteDetailView: React.FC = () => {
                   <option value="medium">Medium</option>
                   <option value="high">High</option>
                   <option value="urgent">Urgent</option>
+                </select>
+              </div>
+
+              <div className="editor-field">
+                <label>Assignee</label>
+                <select
+                  value={editingTask.assigneeId ?? ''}
+                  onChange={(e) => {
+                    const assigneeId = e.target.value || undefined;
+                    handleUpdateTask(editingTask.id, { assigneeId });
+                    setEditingTask({ ...editingTask, assigneeId });
+                  }}
+                  className="status-select"
+                >
+                  <option value="">Unassigned</option>
+                  {users && users.map(u => (
+                    <option key={u.id} value={u.id}>{u.name}</option>
+                  ))}
                 </select>
               </div>
 

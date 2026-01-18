@@ -20,6 +20,8 @@ interface NotesState {
   isPanning: boolean;
   history: StickyNote[][];
   historyIndex: number;
+  // Users for assignees
+  users: Array<{ id: string; name: string; email?: string; avatarUrl?: string }>;
   
   // Actions
   setActiveCanvas: (canvasId: CanvasId) => void;
@@ -68,6 +70,10 @@ interface NotesState {
   moveTask: (noteId: string, taskId: string, status: import('../types').Task['status'], order?: number) => void;
   reorderTask: (noteId: string, taskId: string, newOrder: number) => void;
   bulkUpdateTasks: (noteId: string, taskIds: string[], updates: Partial<import('../types').Task>) => void;
+  // Users
+  addUser: (user: { name: string; email?: string; avatarUrl?: string }) => string;
+  updateUser: (id: string, updates: Partial<{ name: string; email?: string; avatarUrl?: string }>) => void;
+  removeUser: (id: string) => void;
 }
 
 const NOTE_COLORS: NoteColor[] = [
@@ -262,6 +268,11 @@ export const useNotesStore = create<NotesState>()(
         // Initial state
         ...createDefaultCanvases(),
         notes: [],
+        // sample users
+        users: [
+          { id: 'user-1', name: 'Alice', email: 'alice@example.com', avatarUrl: '' },
+          { id: 'user-2', name: 'Bob', email: 'bob@example.com', avatarUrl: '' },
+        ],
         selectedNoteId: null,
         selectedNoteIds: [],
         detailViewNoteId: null,
@@ -339,6 +350,15 @@ export const useNotesStore = create<NotesState>()(
             historyIndex: 0,
           };
         }),
+
+        // Users
+        addUser: (user) => {
+          const id = `user-${Date.now()}-${Math.random().toString(36).slice(2,8)}`;
+          set((state) => ({ users: [...(state.users || []), { id, ...user }] }));
+          return id;
+        },
+        updateUser: (id, updates) => set((state) => ({ users: (state.users || []).map(u => u.id === id ? { ...u, ...updates } : u) })),
+        removeUser: (id) => set((state) => ({ users: (state.users || []).filter(u => u.id !== id) })),
 
         // Detail view
         setDetailViewNoteId: (id) => set({ detailViewNoteId: id }),
