@@ -1,5 +1,6 @@
 import React from 'react';
 import './Toolbar.css';
+import Modal from '../Modal/Modal';
 
 interface ToolbarProps {
   zoom: number;
@@ -85,18 +86,7 @@ const Toolbar: React.FC<ToolbarProps> = ({
           <button onClick={onExport} title="Export Notes" className="toolbar-btn">
             📤 Export
           </button>
-          <button
-            onClick={() => {
-              if (window.confirm(`Delete all ${noteCount} notes?`)) {
-                onDeleteAll();
-              }
-            }}
-            disabled={noteCount === 0}
-            title="Delete All Notes"
-            className="toolbar-btn toolbar-btn-danger"
-          >
-            🗑️ Clear All
-          </button>
+          <ClearAllButton noteCount={noteCount} onDeleteAll={onDeleteAll} disabled={noteCount === 0} />
         </div>
       </div>
 
@@ -110,3 +100,30 @@ const Toolbar: React.FC<ToolbarProps> = ({
 };
 
 export default Toolbar;
+
+const ClearAllButton: React.FC<{ noteCount: number; onDeleteAll: () => void; disabled?: boolean }> = ({ noteCount, onDeleteAll, disabled }) => {
+  const [open, setOpen] = React.useState(false);
+  return (
+    <>
+      <button
+        onClick={() => setOpen(true)}
+        disabled={disabled}
+        title="Delete All Notes"
+        className="toolbar-btn toolbar-btn-danger"
+        aria-disabled={disabled}
+      >
+        🗑️ Clear All
+      </button>
+      {open && (
+        <Modal
+          title="Confirm Delete All"
+          onClose={() => setOpen(false)}
+          onConfirm={() => { onDeleteAll(); setOpen(false); }}
+          confirmLabel="Delete"
+        >
+          <p>Delete all {noteCount} notes? This action cannot be undone.</p>
+        </Modal>
+      )}
+    </>
+  );
+};

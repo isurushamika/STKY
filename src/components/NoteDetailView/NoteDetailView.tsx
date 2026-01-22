@@ -94,6 +94,19 @@ const NoteDetailView: React.FC = () => {
     };
   }, [taskContextMenu.isOpen]);
 
+  // focus first context menu item when opened
+  const contextMenuRef = React.useRef<HTMLDivElement | null>(null);
+  React.useEffect(() => {
+    if (!taskContextMenu.isOpen) return;
+    // focus first button inside the context menu
+    setTimeout(() => {
+      try {
+        const el = contextMenuRef.current?.querySelector<HTMLButtonElement>('.task-context-menu-item');
+        el?.focus();
+      } catch {}
+    }, 0);
+  }, [taskContextMenu.isOpen]);
+
   const clearPomodoroInterval = () => {
     if (pomodoroIntervalRef.current !== null) {
       window.clearInterval(pomodoroIntervalRef.current);
@@ -394,7 +407,7 @@ const NoteDetailView: React.FC = () => {
 
   return (
     <div className="note-detail-overlay" onClick={handleClose}>
-      <div className="note-detail-modal" onClick={(e) => e.stopPropagation()}>
+      <div className="note-detail-modal" role="dialog" aria-modal="true" aria-label={`Note details for ${note.text?.slice(0,60)}`} onClick={(e) => e.stopPropagation()}>
         <div className="note-detail-header">
           <div className="header-info">
             <h2>Note Details</h2>
@@ -488,6 +501,10 @@ const NoteDetailView: React.FC = () => {
                 onDragLeave={handleDragLeave}
                 onDrop={handleDrop}
                 onClick={() => fileInputRef.current?.click()}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInputRef.current?.click(); } }}
+                aria-label="Upload files"
               >
                 <div className="drop-zone-icon">📁</div>
                 <div className="drop-zone-text">
@@ -702,8 +719,21 @@ const NoteDetailView: React.FC = () => {
                               <div
                                 key={task.id}
                                 className={`task-card ${pomodoroTask?.id === task.id ? 'editing' : ''}`}
+                                role="button"
+                                tabIndex={0}
+                                aria-pressed={pomodoroTask?.id === task.id}
                                 onClick={() => handleTaskClick(task)}
                                 onContextMenu={(e) => handleTaskContextMenu(e, task)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleTaskClick(task); }
+                                  else if (e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10')) {
+                                    e.preventDefault();
+                                    const rect = (e.target as HTMLElement).getBoundingClientRect();
+                                    const x = Math.max(8, Math.min(rect.left + 8, window.innerWidth - 190 - 8));
+                                    const y = Math.max(8, Math.min(rect.top + 8, window.innerHeight - 96 - 8));
+                                    setTaskContextMenu({ isOpen: true, x, y, task });
+                                  }
+                                }}
                                 draggable
                                 onDragStart={(e) => handleDragTaskStart(e, task.id)}
                               >
@@ -780,7 +810,10 @@ const NoteDetailView: React.FC = () => {
 
       {taskContextMenu.isOpen && taskContextMenu.task && (
         <div
+          ref={contextMenuRef}
           className="task-context-menu"
+          role="menu"
+          aria-label={`Options for ${taskContextMenu.task.name}`}
           style={{ top: taskContextMenu.y, left: taskContextMenu.x }}
           onMouseDown={(e) => e.stopPropagation()}
           onClick={(e) => e.stopPropagation()}
@@ -788,6 +821,7 @@ const NoteDetailView: React.FC = () => {
           <button
             type="button"
             className="task-context-menu-item"
+            role="menuitem"
             onClick={() => {
               setEditingTask(taskContextMenu.task);
               closeTaskContextMenu();
@@ -798,6 +832,7 @@ const NoteDetailView: React.FC = () => {
           <button
             type="button"
             className="task-context-menu-item danger"
+            role="menuitem"
             onClick={() => {
               handleRemoveTask(taskContextMenu.task!.id);
               closeTaskContextMenu();

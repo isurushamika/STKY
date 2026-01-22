@@ -96,6 +96,13 @@ const GanttChart: React.FC<GanttChartProps> = ({ tasks, onTaskClick }) => {
               key={task.id}
               className={`gantt-task-row ${onTaskClick ? 'clickable' : ''}`}
               onClick={() => onTaskClick?.(task)}
+              role={onTaskClick ? 'button' : undefined}
+              tabIndex={onTaskClick ? 0 : undefined}
+              onKeyDown={(e) => {
+                if (!onTaskClick) return;
+                if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onTaskClick(task); }
+              }}
+              aria-label={`${task.name}, ${formatDateShort(task.startDate)} to ${formatDateShort(task.endDate)}, ${task.progress}% complete`}
             >
               <div className="task-info">
                 <div className="task-name">{task.name}</div>

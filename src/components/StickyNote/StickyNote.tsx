@@ -175,6 +175,13 @@ const StickyNote: React.FC<StickyNoteProps> = ({ note }) => {
       }}
       onMouseDown={handleMouseDown}
       onDoubleClick={handleDoubleClick}
+      role="article"
+      tabIndex={0}
+      aria-label={`Sticky note: ${String(note.text).slice(0,60)}`}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') { e.preventDefault(); setIsEditing(true); }
+        else if (e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10')) { e.preventDefault(); setDetailViewNoteId(note.id); }
+      }}
     >
       {isEditing ? (
         <textarea
